@@ -1,0 +1,40 @@
+environment: local
+
+server:
+  host: 0.0.0.0
+  port: 4002
+  read_timeout: 15s
+  write_timeout: 15s
+  idle_timeout: 60s
+
+database:
+  host: localhost
+  port: 5432
+  user: admin
+  password: admin
+  db_name: user_db
+  schema: "user"
+  sslmode: disable
+  max_open_conns: 25
+  max_idle_conns: 5
+  conn_max_lifetime: 5m
+
+jwt:
+  secret: "dev-super-secret-key-change-in-production-min-32-chars"
+  access_token_duration: 15m
+  issuer: "farmanexo-user-service"
+
+aws:
+  region: us-east-1
+  endpoint: "http://localhost:4566"
+
+sqs:
+  user_events_queue_url: "http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/farmanexo-user-events"
+  auth_events_queue_url: "http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/farmanexo-auth-events"
+
+s3:
+  avatars_bucket: "farmanexo-avatars"
+
+log:
+  level: debug
+  encoding: console
