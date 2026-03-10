@@ -24,6 +24,14 @@ jwt:
   access_token_duration: 15m
   issuer: "farmanexo-auth-service"
 
+redis:
+  host: ${REDIS_HOST}
+  port: 6379
+  password: ${REDIS_PASSWORD}
+  db: 0
+  max_retries: 3
+  pool_size: 20
+
 aws:
   region: ${AWS_REGION}
   endpoint: ""
