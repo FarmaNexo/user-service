@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -81,18 +82,26 @@ type LogConfig struct {
 // LoadConfig carga la configuración basada en el environment
 func LoadConfig(environment string) (*Config, error) {
 	v := viper.New()
-
-	v.SetConfigName(fmt.Sprintf("config.%s", environment))
 	v.SetConfigType("yaml")
-	v.AddConfigPath("./configs")
-	v.AddConfigPath("../configs")
-	v.AddConfigPath("../../configs")
 
-	v.AutomaticEnv()
-	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	// Buscar el archivo config en múltiples rutas
+	configFile := findConfigFile(environment)
+	if configFile == "" {
+		return nil, fmt.Errorf("config file config.%s.yaml not found", environment)
+	}
 
-	if err := v.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("error reading config file: %w", err)
+	// Leer el archivo YAML como string
+	content, err := os.ReadFile(configFile)
+	if err != nil {
+		return nil, fmt.Errorf("error reading config file %s: %w", configFile, err)
+	}
+
+	// Expandir variables de entorno ${VAR} en el YAML
+	expanded := os.ExpandEnv(string(content))
+
+	// Pasar el YAML expandido a Viper
+	if err := v.ReadConfig(strings.NewReader(expanded)); err != nil {
+		return nil, fmt.Errorf("error parsing config: %w", err)
 	}
 
 	var config Config
@@ -170,4 +179,17 @@ func (c *Config) IsQA() bool {
 
 func (c *Config) IsUAT() bool {
 	return c.Environment == "uat"
+}
+
+func findConfigFile(environment string) string {
+	filename := fmt.Sprintf("config.%s.yaml", environment)
+	paths := []string{"./configs", "../configs", "../../configs"}
+
+	for _, dir := range paths {
+		path := fmt.Sprintf("%s/%s", dir, filename)
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+	return ""
 }
