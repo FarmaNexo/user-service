@@ -52,6 +52,7 @@ func SetupRoutes(
 	// HEALTH CHECK
 	// ========================================
 
+	r.Get("/health", userController.HealthCheck)
 	r.Get("/users/health", userController.HealthCheck)
 	r.Get("/", userController.HealthCheck)
 
