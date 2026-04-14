@@ -8,9 +8,12 @@ import (
 	"github.com/google/uuid"
 )
 
-// ProfileResponse DTO de respuesta de perfil
+// ProfileResponse DTO de respuesta de perfil.
+// Email y Role son una proyección sincronizada desde auth-service vía eventos.
 type ProfileResponse struct {
 	UserID      uuid.UUID  `json:"user_id"`
+	Email       string     `json:"email,omitempty"`
+	Role        string     `json:"role"`
 	FullName    string     `json:"full_name"`
 	Phone       string     `json:"phone,omitempty"`
 	Bio         string     `json:"bio,omitempty"`
@@ -24,6 +27,8 @@ type ProfileResponse struct {
 func NewProfileResponse(profile *entities.UserProfile) ProfileResponse {
 	return ProfileResponse{
 		UserID:      profile.UserID,
+		Email:       profile.Email,
+		Role:        profile.Role,
 		FullName:    profile.FullName,
 		Phone:       profile.Phone,
 		Bio:         profile.Bio,

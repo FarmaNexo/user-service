@@ -7,9 +7,16 @@ import (
 	"github.com/google/uuid"
 )
 
-// UserProfile representa el perfil de un usuario
+// UserProfile representa el perfil de un usuario.
+//
+// Email y Role son una proyección read-side de auth-service: la fuente de verdad
+// vive en auth.users. Aquí se mantienen sincronizados vía eventos
+// (USER_REGISTERED, USER_EMAIL_CHANGED, USER_ROLE_CHANGED). Esto evita un hop HTTP
+// adicional al consultar el perfil y desacopla user-service de auth-service en runtime.
 type UserProfile struct {
 	UserID      uuid.UUID  `gorm:"type:uuid;primaryKey" json:"user_id"`
+	Email       string     `gorm:"type:varchar(255)" json:"email,omitempty"`
+	Role        string     `gorm:"type:varchar(50);not null;default:user" json:"role"`
 	FullName    string     `gorm:"type:varchar(255);not null" json:"full_name"`
 	Phone       string     `gorm:"type:varchar(20)" json:"phone,omitempty"`
 	Bio         string     `gorm:"type:text" json:"bio,omitempty"`
@@ -24,12 +31,14 @@ func (UserProfile) TableName() string {
 	return "\"user\".profiles"
 }
 
-// NewUserProfile crea un perfil de usuario con valores iniciales
+// NewUserProfile crea un perfil de usuario con valores iniciales.
+// Se invoca al consumir USER_REGISTERED desde auth-service.
 func NewUserProfile(userID uuid.UUID, fullName string) *UserProfile {
 	now := time.Now()
 	return &UserProfile{
 		UserID:    userID,
 		FullName:  fullName,
+		Role:      "user",
 		CreatedAt: now,
 		UpdatedAt: now,
 	}

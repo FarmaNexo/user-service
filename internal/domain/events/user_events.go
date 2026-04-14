@@ -56,12 +56,22 @@ func NewAddressCreatedEvent(userID string, addressID string) UserEvent {
 	}
 }
 
-// AuthEvent representa un evento recibido desde Auth Service
+// AuthEvent representa un evento recibido desde Auth Service.
+// Espejo del contrato publicado por auth-service.
 type AuthEvent struct {
 	EventType string            `json:"event_type"`
 	UserID    string            `json:"user_id"`
 	Email     string            `json:"email,omitempty"`
 	FullName  string            `json:"full_name,omitempty"`
+	Phone     string            `json:"phone,omitempty"`
+	Role      string            `json:"role,omitempty"`
 	Timestamp time.Time         `json:"timestamp"`
 	Metadata  map[string]string `json:"metadata,omitempty"`
 }
+
+// Constantes de tipo de evento (espejo de auth-service).
+const (
+	AuthEventUserRegistered   = "USER_REGISTERED"
+	AuthEventUserEmailChanged = "USER_EMAIL_CHANGED"
+	AuthEventUserRoleChanged  = "USER_ROLE_CHANGED"
+)

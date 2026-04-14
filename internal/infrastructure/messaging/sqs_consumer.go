@@ -145,8 +145,12 @@ func (c *SQSEventConsumer) processMessage(ctx context.Context, message sqstypes.
 	)
 
 	switch authEvent.EventType {
-	case "USER_REGISTERED":
+	case events.AuthEventUserRegistered:
 		c.handleUserRegistered(ctx, authEvent)
+	case events.AuthEventUserEmailChanged:
+		c.handleUserEmailChanged(ctx, authEvent)
+	case events.AuthEventUserRoleChanged:
+		c.handleUserRoleChanged(ctx, authEvent)
 	default:
 		c.logger.Debug("Evento ignorado",
 			zap.String("event_type", authEvent.EventType),
@@ -184,14 +188,21 @@ func (c *SQSEventConsumer) handleUserRegistered(ctx context.Context, event event
 		return
 	}
 
-	// Usar full_name del evento si existe, sino usar email como nombre
+	// Usar full_name del evento si existe, sino usar email como nombre (fallback defensivo).
 	fullName := event.FullName
 	if fullName == "" {
 		fullName = event.Email
 	}
 
-	// Crear perfil inicial
+	// Crear perfil inicial. Email y Role son la proyección read-side de auth-service.
 	profile := entities.NewUserProfile(userID, fullName)
+	profile.Email = event.Email
+	if event.Role != "" {
+		profile.Role = event.Role
+	}
+	if event.Phone != "" {
+		profile.Phone = event.Phone
+	}
 	if err := c.profileRepo.Create(ctx, profile); err != nil {
 		c.logger.Error("Error creando perfil inicial",
 			zap.String("user_id", event.UserID),
@@ -214,6 +225,64 @@ func (c *SQSEventConsumer) handleUserRegistered(ctx context.Context, event event
 		zap.String("user_id", event.UserID),
 		zap.String("full_name", fullName),
 	)
+}
+
+// handleUserEmailChanged sincroniza la proyección local del email cuando cambia en auth-service.
+func (c *SQSEventConsumer) handleUserEmailChanged(ctx context.Context, event events.AuthEvent) {
+	userID, err := uuid.Parse(event.UserID)
+	if err != nil {
+		c.logger.Error("Error parseando user_id del evento",
+			zap.String("user_id", event.UserID), zap.Error(err))
+		return
+	}
+	if event.Email == "" {
+		c.logger.Warn("USER_EMAIL_CHANGED sin email", zap.String("user_id", event.UserID))
+		return
+	}
+
+	profile, err := c.profileRepo.FindByUserID(ctx, userID)
+	if err != nil {
+		c.logger.Error("Error buscando perfil para actualizar email",
+			zap.String("user_id", event.UserID), zap.Error(err))
+		return
+	}
+	profile.Email = event.Email
+	if err := c.profileRepo.Update(ctx, profile); err != nil {
+		c.logger.Error("Error actualizando email del perfil",
+			zap.String("user_id", event.UserID), zap.Error(err))
+		return
+	}
+	c.logger.Info("Email del perfil sincronizado desde auth-service",
+		zap.String("user_id", event.UserID))
+}
+
+// handleUserRoleChanged sincroniza la proyección local del role cuando cambia en auth-service.
+func (c *SQSEventConsumer) handleUserRoleChanged(ctx context.Context, event events.AuthEvent) {
+	userID, err := uuid.Parse(event.UserID)
+	if err != nil {
+		c.logger.Error("Error parseando user_id del evento",
+			zap.String("user_id", event.UserID), zap.Error(err))
+		return
+	}
+	if event.Role == "" {
+		c.logger.Warn("USER_ROLE_CHANGED sin role", zap.String("user_id", event.UserID))
+		return
+	}
+
+	profile, err := c.profileRepo.FindByUserID(ctx, userID)
+	if err != nil {
+		c.logger.Error("Error buscando perfil para actualizar role",
+			zap.String("user_id", event.UserID), zap.Error(err))
+		return
+	}
+	profile.Role = event.Role
+	if err := c.profileRepo.Update(ctx, profile); err != nil {
+		c.logger.Error("Error actualizando role del perfil",
+			zap.String("user_id", event.UserID), zap.Error(err))
+		return
+	}
+	c.logger.Info("Role del perfil sincronizado desde auth-service",
+		zap.String("user_id", event.UserID), zap.String("new_role", event.Role))
 }
 
 func (c *SQSEventConsumer) deleteMessage(ctx context.Context, message sqstypes.Message) {
