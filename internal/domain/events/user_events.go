@@ -74,4 +74,5 @@ const (
 	AuthEventUserRegistered   = "USER_REGISTERED"
 	AuthEventUserEmailChanged = "USER_EMAIL_CHANGED"
 	AuthEventUserRoleChanged  = "USER_ROLE_CHANGED"
+	AuthEventUserDeleted      = "USER_DELETED"
 )

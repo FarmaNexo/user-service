@@ -21,12 +21,13 @@ import (
 
 // SQSEventConsumer consume eventos de la cola de Auth Service
 type SQSEventConsumer struct {
-	sqsClient  *sqs.Client
-	queueURL   string
+	sqsClient   *sqs.Client
+	queueURL    string
 	profileRepo repositories.ProfileRepository
 	prefsRepo   repositories.PreferencesRepository
-	logger     *zap.Logger
-	stopCh     chan struct{}
+	addressRepo repositories.AddressRepository
+	logger      *zap.Logger
+	stopCh      chan struct{}
 }
 
 // NewSQSEventConsumer crea una nueva instancia del consumer
@@ -35,6 +36,7 @@ func NewSQSEventConsumer(
 	sqsCfg config.SQSConfig,
 	profileRepo repositories.ProfileRepository,
 	prefsRepo repositories.PreferencesRepository,
+	addressRepo repositories.AddressRepository,
 	logger *zap.Logger,
 ) (*SQSEventConsumer, error) {
 	optFns := []func(*awsconfig.LoadOptions) error{
@@ -70,6 +72,7 @@ func NewSQSEventConsumer(
 		queueURL:    sqsCfg.AuthEventsQueueURL,
 		profileRepo: profileRepo,
 		prefsRepo:   prefsRepo,
+		addressRepo: addressRepo,
 		logger:      logger,
 		stopCh:      make(chan struct{}),
 	}, nil
@@ -151,6 +154,8 @@ func (c *SQSEventConsumer) processMessage(ctx context.Context, message sqstypes.
 		c.handleUserEmailChanged(ctx, authEvent)
 	case events.AuthEventUserRoleChanged:
 		c.handleUserRoleChanged(ctx, authEvent)
+	case events.AuthEventUserDeleted:
+		c.handleUserDeleted(ctx, authEvent)
 	default:
 		c.logger.Debug("Evento ignorado",
 			zap.String("event_type", authEvent.EventType),
@@ -283,6 +288,66 @@ func (c *SQSEventConsumer) handleUserRoleChanged(ctx context.Context, event even
 	}
 	c.logger.Info("Role del perfil sincronizado desde auth-service",
 		zap.String("user_id", event.UserID), zap.String("new_role", event.Role))
+}
+
+// handleUserDeleted reacciona al ejercicio del derecho ARCO de cancelación del usuario.
+// Anonimiza la proyección del perfil (email, nombre, teléfono, bio, avatar, fecha de
+// nacimiento), elimina todas las direcciones registradas y resetea las preferencias a
+// valores por defecto. Es idempotente: si no hay perfil o ya fue anonimizado, no hace nada.
+func (c *SQSEventConsumer) handleUserDeleted(ctx context.Context, event events.AuthEvent) {
+	userID, err := uuid.Parse(event.UserID)
+	if err != nil {
+		c.logger.Error("Error parseando user_id del evento USER_DELETED",
+			zap.String("user_id", event.UserID), zap.Error(err))
+		return
+	}
+
+	// 1. Anonimizar perfil (si existe)
+	profile, err := c.profileRepo.FindByUserID(ctx, userID)
+	if err != nil {
+		c.logger.Warn("Perfil no encontrado al procesar USER_DELETED (posiblemente ya limpio)",
+			zap.String("user_id", event.UserID), zap.Error(err))
+	} else if profile != nil {
+		profile.Email = fmt.Sprintf("deleted-%s@deleted.local", userID.String())
+		profile.FullName = "USUARIO ELIMINADO"
+		profile.Phone = ""
+		profile.Bio = ""
+		profile.AvatarURL = ""
+		profile.DateOfBirth = nil
+		if err := c.profileRepo.Update(ctx, profile); err != nil {
+			c.logger.Error("Error anonimizando perfil en USER_DELETED",
+				zap.String("user_id", event.UserID), zap.Error(err))
+			return
+		}
+	}
+
+	// 2. Eliminar todas las direcciones del usuario
+	addresses, err := c.addressRepo.FindByUserID(ctx, userID)
+	if err != nil {
+		c.logger.Error("Error listando direcciones para eliminar",
+			zap.String("user_id", event.UserID), zap.Error(err))
+	} else {
+		for _, addr := range addresses {
+			if err := c.addressRepo.Delete(ctx, addr.ID); err != nil {
+				c.logger.Warn("Error eliminando dirección (continúa con el resto)",
+					zap.String("user_id", event.UserID),
+					zap.String("address_id", addr.ID.String()),
+					zap.Error(err))
+			}
+		}
+	}
+
+	// 3. Resetear preferencias a valores por defecto
+	defaultPrefs := entities.NewDefaultPreferences(userID)
+	if err := c.prefsRepo.Update(ctx, defaultPrefs); err != nil {
+		// No bloqueante: las preferencias son cosméticas y pueden recrearse
+		c.logger.Warn("Error reseteando preferencias (continúa el flujo)",
+			zap.String("user_id", event.UserID), zap.Error(err))
+	}
+
+	c.logger.Info("Usuario anonimizado en user-service por USER_DELETED",
+		zap.String("user_id", event.UserID),
+		zap.Int("addresses_deleted", len(addresses)))
 }
 
 func (c *SQSEventConsumer) deleteMessage(ctx context.Context, message sqstypes.Message) {

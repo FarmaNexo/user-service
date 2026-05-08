@@ -111,7 +111,7 @@ func main() {
 	}
 
 	// SQS Event Consumer (Auth events)
-	eventConsumer, err := messaging.NewSQSEventConsumer(cfg.AWS, cfg.SQS, profileRepo, prefsRepo, logger)
+	eventConsumer, err := messaging.NewSQSEventConsumer(cfg.AWS, cfg.SQS, profileRepo, prefsRepo, addressRepo, logger)
 	if err != nil {
 		logger.Fatal("Error inicializando SQS EventConsumer", zap.Error(err))
 	}
