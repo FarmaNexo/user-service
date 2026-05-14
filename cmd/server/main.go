@@ -148,6 +148,9 @@ func main() {
 	listAddressesHandler := handlers.NewListAddressesHandler(addressRepo, logger)
 	mediator.RegisterHandler(med, listAddressesHandler)
 
+	getAddressByIDHandler := handlers.NewGetAddressByIDHandler(addressRepo, logger)
+	mediator.RegisterHandler(med, getAddressByIDHandler)
+
 	createAddressHandler := handlers.NewCreateAddressHandler(addressRepo, eventPublisher, logger)
 	mediator.RegisterHandler(med, createAddressHandler)
 

@@ -75,6 +75,7 @@ func SetupRoutes(
 
 			// Direcciones
 			r.Get("/me/addresses", userController.ListAddresses)
+			r.Get("/me/addresses/{id}", userController.GetAddress)
 			r.Post("/me/addresses", userController.CreateAddress)
 			r.Put("/me/addresses/{id}", userController.UpdateAddress)
 			r.Delete("/me/addresses/{id}", userController.DeleteAddress)

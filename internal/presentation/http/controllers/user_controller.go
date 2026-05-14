@@ -306,6 +306,40 @@ func (c *UserController) CreateAddress(w http.ResponseWriter, r *http.Request) {
 	c.respondJSON(w, response)
 }
 
+// GetAddress godoc
+// @Summary      Obtener una dirección por ID
+// @Description  Retorna una dirección del usuario autenticado por su ID. 403 si la dirección pertenece a otro usuario.
+// @Tags         Addresses
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id   path      string  true  "ID de la dirección"
+// @Success      200  {object}  common.ApiResponse[responses.AddressResponse]  "Dirección encontrada"
+// @Failure      401  {object}  common.ApiResponse[responses.AddressResponse]  "No autorizado"
+// @Failure      403  {object}  common.ApiResponse[responses.AddressResponse]  "Dirección pertenece a otro usuario"
+// @Failure      404  {object}  common.ApiResponse[responses.AddressResponse]  "Dirección no encontrada"
+// @Router       /api/v1/users/me/addresses/{id} [get]
+func (c *UserController) GetAddress(w http.ResponseWriter, r *http.Request) {
+	addressID := chi.URLParam(r, "id")
+
+	userID, ok := middlewares.GetUserIDFromContext(r.Context())
+	if !ok {
+		c.respondJSON(w, common.UnauthorizedResponse[responses.AddressResponse]("Usuario no autenticado"))
+		return
+	}
+
+	query := queries.GetAddressByIDQuery{UserID: userID, AddressID: addressID}
+	response, err := mediator.Send[queries.GetAddressByIDQuery, responses.AddressResponse](
+		r.Context(), c.mediator, query,
+	)
+	if err != nil {
+		c.logger.Error("Error ejecutando GetAddressByIDQuery", zap.Error(err))
+		c.respondJSON(w, common.InternalServerErrorResponse[responses.AddressResponse]("Error obteniendo dirección"))
+		return
+	}
+
+	c.respondJSON(w, response)
+}
+
 // UpdateAddress godoc
 // @Summary      Actualizar una dirección
 // @Description  Actualiza una dirección existente del usuario autenticado
